@@ -1,0 +1,656 @@
+<?php
+
+/**
+ * @author Java Video Tutorials
+ * @copyright 2008
+ */
+
+define('T', "\t");
+define('NL', "\r\n");
+
+$ccTypes = array('all', 'fast', 'bankcard', 'diners', 'disc', 'electron', 'enroute', 'jcb', 'maestro', 'mc', 'solo', 'switch', 'visa', 'voyager');
+$dateTypes = array('ymd', 'dmy', 'mdy', 'ymd', 'dMy', 'Mdy', 'My', 'my');
+
+if ($_POST['submit'] == 'Submit')
+{
+	header('Content-type: text/plain');
+	$tab = '';
+	for ($tabs = $_POST['tabs'];$tabs != 0;--$tabs) $tab .= T; 
+	
+	$validate = array();
+	 
+	$numFields = $_POST['numFields'];
+	$validate['@numFields'] = $numFields;
+	
+	for ($i = 0; $i<$numFields; $i++)
+	{	
+		$fieldName = $_POST['fieldName'.$i];
+		$numRules = $_POST['numRules'.$i];
+		
+		$validate[$fieldName] = array();
+		$validate[$fieldName]['@numRules'] = $numRules;
+		
+		for ($j = 0; $j<$numRules;$j++)
+		{
+			$ruleName = $_POST['ruleName'.$i.'_'.$j];
+			$ruleType = $_POST['ruleType'.$i.'_'.$j];
+			$allowEmpty = $_POST['allowEmpty'.$i.'_'.$j];
+			$required = $_POST['required'.$i.'_'.$j];
+			$message = $_POST['message'.$i.'_'.$j];
+			$onUpdate = $_POST['onUpdate'.$i.'_'.$j];
+			$onCreate = $_POST['onCreate'.$i.'_'.$j];
+			
+			$allowEmpty = ($allowEmpty == 'on') ? 'true' : 'false';
+			$required = ($required == 'on') ? 'true' : 'false';
+			$onUpdate = ($onUpdate == 'on') ? 'true' : 'false';
+			$onCreate = ($onCreate == 'on') ? 'true' : 'false';
+			
+			$args = array();
+			$numArgs = $_POST['numArgs'.$i.'_'.$j];
+			for ($k = 0; $k<$numArgs; $k++)
+			{
+				if (!empty($_POST['arg'.$k.'_'.$i.'_'.$j]))
+					$args[] = $_POST['arg'.$k.'_'.$i.'_'.$j]; //arg{ArgNum}_{field}_{rule}
+			}
+			
+			$validate[$fieldName][$ruleName] = array();
+			$validate[$fieldName][$ruleName]['name'] = $ruleName;
+			$validate[$fieldName][$ruleName]['rule'] = $ruleType;
+			$validate[$fieldName][$ruleName]['allowEmpty'] = $allowEmpty;
+			$validate[$fieldName][$ruleName]['required'] = $required;
+			$validate[$fieldName][$ruleName]['message'] = $message;
+			$validate[$fieldName][$ruleName]['onUpdate'] = $onUpdate;
+			$validate[$fieldName][$ruleName]['onCreate'] = $onCreate;
+			
+			
+			
+			$validate[$fieldName][$ruleName]['args'] = $args;
+		}
+	}
+	$v = $tab.'var $validate = array('.NL;
+	
+	foreach ($validate as $name => $field)
+	{
+		if (!is_array($field)) continue;
+		$v .= $tab.T."'$name' => array(".NL;
+		
+		foreach ($field as $rName => $rule)
+		{
+			if (!is_array($rule)) continue;
+			if (sizeof($rule['args']) == 0)
+			{
+				$ruleAndArgs = "'".$rule['rule']."'";
+			}
+			else
+			{
+				$rType = $rule['rule'];
+				$rArgs = $rule['args'];
+				if ($rType == 'customFunc') $rType = $rArgs[0];
+				$ruleAndArgs = "array('{$rType}', ";
+				switch ($rType)
+				{
+					case 'alphaNumeric' :
+						
+					break;
+					case 'between' :
+						$ruleAndArgs .= $rArgs[0] . ', ' . $rArgs[1] . ')';
+					break;
+					case 'blank' :
+					
+					break;
+					case 'cc' :
+						$coolTypes = array();
+						for ($i = 0; $i<sizeof($ccTypes); $i++)
+						{
+							if ($rArgs[$i] == 'on') $coolTypes[] = $ccTypes[$i];
+						}
+						$ruleAndArgs .= 'array(';
+						foreach($coolTypes as $ct) $ruleAndArgs .= "'".$ct."'" . ', ';
+						$ruleAndArgs = substr($ruleAndArgs, 0, strlen($ruleAndArgs)-2);
+						$ruleAndArgs .= '), ';
+						$deep = ($rArgs[14] == 'on') ? 'true' : 'false';
+						$regex = (isset($rArgs[15])) ? "'".$rArgs[15]."'" : 'null';
+						$ruleAndArgs .= $deep . ', ' . $regex . ')';
+					break;
+					case 'comparison' :
+						$ruleAndArgs .= "'".$rArgs[0]."', " . $rArgs[1] . ')';
+					break;
+					case 'date' :
+						$coolDates = array();
+						for ($i = 0; $i<sizeof($dateTypes); $i++)
+						{
+							if ($rArgs[$i] == 'on') $coolDates[] = $dateTypes[$i];
+						}
+						$coolDates = array_unique($coolDates);
+						$ruleAndArgs .= 'array(';
+						foreach($coolDates as $ct) $ruleAndArgs .= "'".$ct."'" . ', ';
+						$ruleAndArgs = substr($ruleAndArgs, 0, strlen($ruleAndArgs)-2);
+						$ruleAndArgs .= '))';
+					break;
+					case 'decimal' :
+						if (is_numeric($rArgs[0]))
+							$ruleAndArgs .= $rArgs[0] . ')';
+						else
+							$ruleAndArgs .= '2)';
+					break;
+					case 'email' :
+						if ($rArgs[0] == 'on')
+							$ruleAndArgs .= 'true)';
+						else
+							$ruleAndArgs .= 'false)';
+					break;
+					case 'equalTo' :
+						$ruleAndArgs .= "'".$rArgs[0]."')";
+					break;
+					case 'extension' :
+						$exts = explode(' ', trim($rArgs[0]));
+						$exts = array_unique($exts);
+						$ruleAndArgs .= 'array(';
+						foreach($exts as $ct) $ruleAndArgs .= "'".$ct."'" . ', ';
+						$ruleAndArgs = substr($ruleAndArgs, 0, strlen($ruleAndArgs)-2);
+						$ruleAndArgs .= '))';
+					break;
+					case 'file' :
+					
+					break;
+					case 'ip' :
+					
+					break;
+					case 'maxLength' :
+						$ruleAndArgs .= $rArgs[0].')';
+					break;
+					case 'money' :
+						$ruleAndArgs .= "'".$rArgs[0]."')";
+					break;
+					case 'isUnique' :
+					
+					break;
+					case 'minLength' :
+						$ruleAndArgs .= $rArgs[0].')';
+					break;
+					case 'inList' :
+						$list = explode(';', trim($rArgs[0]));
+						$list = array_map('trim', $list);
+						$list = array_unique($list);
+						$ruleAndArgs .= 'array(';
+						foreach($list as $ct) $ruleAndArgs .= "'".$ct."'" . ', ';
+						$ruleAndArgs = substr($ruleAndArgs, 0, strlen($ruleAndArgs)-2);
+						$ruleAndArgs .= '))';
+					break;
+					case 'notEmpty' :
+					
+					break;
+					case 'numeric' :
+					
+					break;
+					case 'phone' :
+						if (!empty($rArgs[0]))
+							$ruleAndArgs .= "'".$rArgs[0]."')";
+						else
+							$ruleAndArgs .= "null, 'us')";
+					break;
+					case 'postal' :
+						if (!empty($rArgs[1]))
+							$ruleAndArgs .= "'".$rArgs[1]."', '" . $rArgs[0]."')";
+						else
+							$ruleAndArgs .= "null, '" . $rArgs[0]."')";
+					break;
+					case 'range' :
+						$ruleAndArgs .= $rArgs[0] . ', ' . $rArgs[1] . ')';
+					break;
+					case 'ssn' :
+						if (!empty($rArgs[1]))
+							$ruleAndArgs .= "'".$rArgs[1]."', '" . $rArgs[0]."')";
+						else
+							$ruleAndArgs .= "null, '" . $rArgs[0]."')";
+					break;
+					case 'url' :
+					
+					break;
+					case 'custom' :
+						$ruleAndArgs .= "'".$rArgs[0]."')";
+					break;
+					default :
+						$params = explode(',', trim($rArgs[1]));
+						foreach($params as $ct) $ruleAndArgs .= $ct . ', ';
+						$ruleAndArgs = substr($ruleAndArgs, 0, strlen($ruleAndArgs)-2);
+						$ruleAndArgs .= ')';
+					break;
+				}
+				
+			}
+			if ($rule['onUpdate'] == 'true' && $rule['onCreate'] == 'true')
+				$on = 'null';
+			else
+			{
+				$on = ($rule['onUpdate'] == 'true') ? 'update' : 'create';
+			}
+			$v .= $tab.T.T."'$rName' => array(".NL;
+			$v .= $tab.T.T.T.'\'rule\' => ' . $ruleAndArgs . ','.NL;
+			$v .= $tab.T.T.T.'\'required\' => ' . $rule['required'] . ','.NL;
+			$v .= $tab.T.T.T.'\'allowEmpty\' => ' . $rule['allowEmpty'] . ','.NL;
+			$v .= $tab.T.T.T.'\'on\' => ' . $on . ','.NL;
+			$v .= $tab.T.T.T.'\'message\' => ' . "'".$rule['message']."'" . ','.NL;
+			$v .= $tab.T.T.T.'), '.NL;
+		}
+		$v = substr($v, 0, strlen($v)-4).NL; 
+		$v .= $tab.T.T.'), '.NL;
+	}
+	$v = substr($v, 0, strlen($v)-4).NL; 
+	
+	$v .= $tab.T.');'.NL;
+	echo $v;
+	exit;
+}
+
+?>
+<html>
+<head>
+<title>Validate CakePHP Model</title>
+<style type="text/css">
+<!--
+#fieldshell {display:none;}
+#ruleshell {display:none;}
+
+.hide {display:none;}
+
+.rule {margin-left: 30px; margin-bottom: 10px;}
+.field {margin-bottom: 30px;}
+
+-->
+</style>
+<script type="text/javascript" src="jquery.js"></script>
+<script type="text/javascript">
+<!--
+
+//submit all checkboxes and radios... even if they're not checked
+$(document).ready(function() 
+{
+	$('#main').submit(function() 
+	{
+		$(':checkbox').each(function() 
+		{
+			if (!this.checked)
+			{
+				$(this).val('off');
+				this.checked = true;
+			}
+		});
+	});
+});
+	
+
+function getText(id) { return document.getElementById(id).innerHTML; }
+function elem(id) { return document.getElementById(id); }
+function br() {return document.createElement('br');}
+
+
+var br = document.createElement('br');
+
+var fields = 0;
+var numRules = [];
+
+var hidden = document.createElement('input');
+hidden.setAttribute('type', 'hidden');
+hidden.setAttribute('name', 'numFields');
+
+var hiddenArr = [];
+
+function updateHidden()
+{
+	hidden.setAttribute('value', fields);
+	elem('form').appendChild(hidden);
+}
+function updateRuleHidden(field)
+{
+	hiddenArr[field].setAttribute('value', numRules[field]);
+	elem('form').appendChild(hiddenArr[field]);
+}
+
+
+function getField()
+{
+	var form = elem('form');
+	numRules[fields] = 0;
+	hiddenArr[fields] = document.createElement('input');
+	hiddenArr[fields].setAttribute('type', 'hidden');
+	hiddenArr[fields].setAttribute('name', 'numRules' + fields);
+	var div = document.createElement('div'); //the container for the field
+	div.setAttribute('id', 'field' + fields); //set its id
+	div.setAttribute('class', 'field'); //set its class
+	var name = document.createTextNode('Field Name: '); 
+	var input_fieldName = document.createElement('input'); //the field name input
+	input_fieldName.setAttribute('type', 'text');
+	input_fieldName.setAttribute('name', 'fieldName' + fields);
+	var rules = document.createElement('div');
+	rules.setAttribute('id', 'rules' + fields);
+	var newRule = document.createElement('a');
+	newRule.setAttribute('href', 'javascript:void(0);');
+	newRule.setAttribute('onclick', 'getRule('+fields+')');
+	var newRuleText = document.createTextNode('Add Rule');
+	newRule.appendChild(newRuleText);
+	div.appendChild(name);
+	div.appendChild(input_fieldName);
+	div.appendChild(rules);
+	div.appendChild(newRule);
+	form.appendChild(div);
+	getRule(fields);
+	fields++;
+	updateHidden();
+}
+function getRule(field)
+{	
+	var ruleDiv = document.createElement('div');
+	ruleDiv.setAttribute('id', 'rule' + field + '_' + numRules[field]);
+	ruleDiv.setAttribute('class', 'rule'); //set its class
+	
+	var name = document.createTextNode('Rule Name: ');
+	
+	var input_ruleName = document.createElement('input');
+	input_ruleName.setAttribute('type', 'text');
+	input_ruleName.setAttribute('name', 'ruleName' + field + '_' + numRules[field]);
+	
+	var rulesDrop = elem('rules_drop').cloneNode(true);
+	rulesDrop.setAttribute('name', 'ruleType' + field + '_' + numRules[field]);
+	rulesDrop.setAttribute('onchange', 'addOptions('+field+','+numRules[field]+',this.value, params' + field + '_' + numRules[field] + ')');
+	
+	var optionsDiv = document.createElement('div');
+	optionsDiv.setAttribute('id',  'options' + field + '_' + numRules[field]);
+	
+	var allowEmpty = document.createElement('input');
+	allowEmpty.setAttribute('type', 'checkbox');
+	allowEmpty.setAttribute('name', 'allowEmpty' + field + '_' + numRules[field]);
+	
+	var required = document.createElement('input');
+	required.setAttribute('type', 'checkbox');
+	required.setAttribute('checked', 'checked');
+	required.setAttribute('name', 'required' + field + '_' + numRules[field]);
+	
+	var onUpdate = document.createElement('input');
+	onUpdate.setAttribute('type', 'checkbox');
+	onUpdate.setAttribute('checked', 'checked');
+	onUpdate.setAttribute('name', 'onUpdate' + field + '_' + numRules[field]);
+	
+	var onCreate = document.createElement('input');
+	onCreate.setAttribute('type', 'checkbox');
+	onCreate.setAttribute('checked', 'checked');
+	onCreate.setAttribute('name', 'onCreate' + field + '_' + numRules[field]);
+	
+	var message = document.createElement('input');
+	message.setAttribute('type', 'text');
+	message.setAttribute('name', 'message' + field + '_' + numRules[field]);
+	
+	var params = document.createElement('div');
+	params.setAttribute('id', 'params' + field + '_' + numRules[field]);
+	
+	var allowEmptyText = document.createTextNode('Allow Empty ');
+	var requiredText = document.createTextNode('Required ');
+	var onText = document.createTextNode('Applies only on... ');
+	var updateText = document.createTextNode('Update, ');
+	var createText = document.createTextNode('Create ');
+	var messageText = document.createTextNode('Custom Message: ');
+	
+	optionsDiv.appendChild(params);
+	optionsDiv.appendChild(allowEmpty);
+	optionsDiv.appendChild(allowEmptyText);
+	optionsDiv.appendChild(document.createElement('br'));
+	optionsDiv.appendChild(required);
+	optionsDiv.appendChild(requiredText);
+	optionsDiv.appendChild(document.createElement('br'));
+	optionsDiv.appendChild(document.createElement('strong').appendChild(onText));
+	optionsDiv.appendChild(onUpdate);
+	optionsDiv.appendChild(updateText);
+	optionsDiv.appendChild(onCreate);
+	optionsDiv.appendChild(createText);
+	optionsDiv.appendChild(document.createElement('br'));
+	optionsDiv.appendChild(messageText);
+	optionsDiv.appendChild(message);
+	optionsDiv.appendChild(document.createElement('br'));
+	
+	
+	ruleDiv.appendChild(name);
+	ruleDiv.appendChild(input_ruleName);
+	ruleDiv.appendChild(document.createElement('br'));
+	ruleDiv.appendChild(rulesDrop);
+	ruleDiv.appendChild(optionsDiv);
+	
+	elem('rules' + field).appendChild(ruleDiv);
+	numRules[field]++;
+	updateRuleHidden(field);
+}
+function addOptions(field, rule, type, opDiv)
+{
+	elem('params'+field+'_'+rule).innerHTML = '';
+	var theDiv = elem(type).cloneNode(true);
+	if (elem('params') == null)
+	{
+		var container = document.createElement('div');
+		container.setAttribute('id', 'params');
+	}
+	else container = elem('params').cloneNode(false);
+	
+	elem('params'+field+'_'+rule).appendChild(theDiv);
+	
+	var numArgs = 0;
+	var numArgsHidden = document.createElement('input');
+	numArgsHidden.setAttribute('type', 'hidden');
+	numArgsHidden.setAttribute('name', 'numArgs'+field+'_'+rule);
+	numArgsHidden.setAttribute('value', '0');
+	numArgsHidden.setAttribute('type', 'hidden');
+	if (theDiv != null)
+	{
+		for (i = 0, j = 0; i<theDiv.childNodes.length; i++)
+		{
+			if(theDiv.childNodes[i].nodeName == 'INPUT' || theDiv.childNodes[i].nodeName == 'SELECT' || theDiv.childNodes[i].nodeName == 'TEXTAREA')
+			{
+				theDiv.childNodes[i].setAttribute('name', 'arg'+ j++ +'_'+field+'_'+rule);
+				numArgs++
+			}
+		}
+		numArgsHidden.setAttribute('value', numArgs + '');
+		
+		opDiv.appendChild(container);
+		opDiv.appendChild(numArgsHidden);	
+	}
+}
+
+// -->
+</script>
+</head>
+<body>
+
+<form method="post" action="" id="main">
+<fieldset>
+
+<div id="form"></div>
+Number of tabs to format array <br />
+<input type="text" name="tabs" value="0" size="1" /><br /><br />
+<a href="javascript:void(0);" onclick="getField()">Add Field</a><br /><br />
+<input type="submit" name="submit" value="Submit" />
+</fieldset>
+</form>
+
+<div id="fieldshell">
+Field Name<br />
+<input type="text" name="{NAME}" /><br /><br />
+</div>
+
+<div id="ruleshell">
+Rule Name<br />
+<input type="text" name="{RULENAME}" /><br /><br />
+
+Rule
+<select id="rules_drop">
+	<option value="alphaNumeric">Alphanumeric</option>
+	<option value="between">Between...</option>
+	<option value="blank">Blank</option>
+	<option value="cc">Credit Card...</option>
+	<option value="comparison">Comparison...</option>
+	<option value="date">Date...</option>
+	<option value="decimal">Decimal...</option>
+	<option value="email">Email...</option>
+	<option value="equalTo">Equal To...</option>
+	<option value="extension">Extension...</option>
+	<option value="file">File</option>
+	<option value="ip">IP Address</option>
+	<option value="maxLength">Maximum Length...</option>
+	<option value="money">Money...</option>
+	<option value="isUnique">Unique</option>
+	<option value="minLength">Minimum Length...</option>
+	<option value="inList">In List...</option>
+	<option value="notEmpty">Not Empty</option>
+	<option value="numeric">Numeric</option>
+	<option value="phone">Phone Number...</option>
+	<option value="postal">Postal/Zip Code...</option>
+	<option value="range">Range...</option>
+	<option value="ssn">Social Security Number...</option>
+	<option value="url">URL</option>
+	<option value="custom">Custom RegEx</option>
+	<option value="customFunc">Custom Function</option>
+</select>
+<div id="options"></div>
+<a id="addRule" href="javascript:void(0);" onclick="addRule('{FIELD}')">Add Rule</a>
+</div>
+
+<div class="hide">
+
+<div id="cc">
+Types:<br />
+* <input type="checkbox" /> All Types (Validates any CC number)<br /> <!-- start array -->
+* <input type="checkbox" /> Fast (major CC format)<br />
+<input type="checkbox" /> Bank Card<br />
+<input type="checkbox" /> Diners<br />
+<input type="checkbox" /> Discover<br />
+<input type="checkbox" /> Electron<br />
+<input type="checkbox" /> EnRoute<br />
+<input type="checkbox" /> JCB<br />
+<input type="checkbox" /> Maestro<br />
+<input type="checkbox" /> MasterCard<br />
+<input type="checkbox" /> Solo<br />
+<input type="checkbox" /> Switch<br />
+<input type="checkbox" /> Visa<br />
+<input type="checkbox" /> Voyager<br /> <!-- end array -->
+* If you choose All or Fast, don't select anything else.<br />
+<input type="checkbox" /> Deep (check with the Lund Algorithm)<br />
+<input type="text" /> Regx (include the RegEx boundary delimiters)<br />
+</div>
+
+<div id="between">
+	<input type="text" size="3" value="min" />
+	<input type="text" size="3" value="max" />
+</div>
+<div id="alphaNumeric"></div>
+<div id="blank"></div>
+<div id="ip"></div>
+<div id="isUnique"></div>
+<div id="numeric"></div>
+<div id="url"></div>
+
+<div id="comparison">
+	<select> <!-- must be a string -->
+		<option value="<">&lt;</option>
+		<option value=">">&gt;</option>
+		<option value="=">=</option>
+		<option value="<=">&lt;=</option>
+		<option value=">=">&gt;=</option>
+		<option value="!=">!=</option>
+	</select>
+	<input type="text" size="3" value="val" />
+</div>
+
+<div id="date">
+	<input type="checkbox" checked="checked" /> Default (ymd)<br />
+	<input type="checkbox" /> ‘dmy’ e.g. 27-12-2006 or 27-12-06 (separators can be a space, period, dash, forward slash)<br />
+	<input type="checkbox" /> ‘mdy’ e.g. 12-27-2006 or 12-27-06 (separators can be a space, period, dash, forward slash)<br />
+	<input type="checkbox" /> ‘ymd’ e.g. 2006-12-27 or 06-12-27 (separators can be a space, period, dash, forward slash)<br />
+	<input type="checkbox" /> ‘dMy’ e.g. 27 December 2006 or 27 Dec 2006<br />
+	<input type="checkbox" /> ‘Mdy’ e.g. December 27, 2006 or Dec 27, 2006 (comma is optional)<br />
+	<input type="checkbox" /> ‘My’ e.g. (December 2006 or Dec 2006)<br />
+	<input type="checkbox" /> ‘my’ e.g. 12/2006 or 12/06 (separators can be a space, period, dash, forward slash)<br />
+</div>           
+   
+<div id="decimal">
+	<input type="text" size="2" /> Leave blank or specify number of places allowed
+</div>
+
+<div id="email">
+	<input type="checkbox" /> Verify Host?
+</div>
+
+<div id="equalTo">
+	<input type="text" size="3" value="val" />
+</div>
+
+<div id="extension">
+	<input type="text" /> File extensions to allow; separate with spaces and do NOT include dots.
+</div>
+
+<div id="file">
+	I'm not sure how this one works, so use it at your own risk :)
+</div>
+
+<div id="maxLength">
+	<input type="text" size="3" value="val" />
+</div>
+
+<div id="money">
+	<select>
+		<option value="left">Sign on Left</option>
+		<option value="right">Sign on Right</option>
+	</select>
+</div>
+
+<div id="inList">
+	<input type="text" /> Separate items in the list with a semicolon ( ; )
+</div>
+
+<div id="minLength">
+	<input type="text" size="3" value="val" />
+</div>
+
+<div id="phone">
+	<input type="text" /> RegEx (include the RegEx boundary delimiters) to valid non-U.S. phone number
+</div>
+
+<div id="postal">
+	Country: 
+	<select>
+		<option value="us">U.S.</option>
+		<option value="ca">Canada</option>
+		<option value="uk">U.K.</option>
+		<option value="it">Italy</option>
+		<option value="de">Germany</option>
+		<option value="be">Belgium</option>
+	</select><br />
+	<input type="text" /> Optional RegEx (include the RegEx boundary delimiters) for other countries<br />
+</div>
+
+<div id="range">
+	Min - Max (non-inclusive) <br />
+	<input type="text" size="3" /> - <input type="text" size="3" />
+</div>
+
+<div id="ssn">
+	Country: 
+	<select>
+		<option value="us">U.S.</option>
+		<option value="dk">Denmark</option>
+		<option value="nl">Netherlands</option>
+	</select><br />
+	<input type="text" /> Optional RegEx (include the RegEx boundary delimiters) for other countries<br />
+</div>
+
+<div id="custom">
+	<input type="text" /> RegEx (include the RegEx boundary delimiters)
+</div>
+
+<div id="customFunc">
+	*Note: the first parameter to the function will be the data from the field.<br />
+	<input type="text" /> Function Name (e.g. is_numeric)<br />
+	<input type="text" /> Additional Function parameters, separated by a comma ( , )<br />
+</div>
+
+</div>
+
+</body>
+</html>
